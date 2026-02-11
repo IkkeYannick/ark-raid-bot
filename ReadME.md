@@ -66,6 +66,7 @@ ROLE_ID=123456789012345678 (Required - Right-click on the role in Discord and co
 DESTRUCTION_ALERT_THRESHOLD=5 (Optional - defaults to 5 if not set)
 DISABLE_SENSOR_ALERTS=false (Optional - set to 'true' to disable raid alerts)
 DISABLE_DESTRUCTION_ALERTS=false (Optional - set to 'true' to disable destruction alerts)
+DEBUG=false (Optional - set to true for verbose logs)
 ```
 ---
 
@@ -93,6 +94,30 @@ python RaidBot.py
 If it works, you should see:
 
 Logged in as ARK Raid Bot
+
+---
+
+## Debugging
+
+Debug mode gives you detailed logs for troubleshooting. You can enable it in two ways:
+
+**Option 1: Using .env file**
+Add this to your `.env` file:
+```env
+DEBUG=true
+```
+
+**Option 2: Command line argument**
+Run the bot with the `--debug` flag:
+```terminal
+python RaidBot.py --debug
+```
+
+When debug mode is enabled, you'll see:
+- Detailed extraction info (maps, locations, destroyed items, raiders)
+- Destruction counters
+- Full stack traces if errors occur
+- Sensor and destruction alert details
 
 ---
 
