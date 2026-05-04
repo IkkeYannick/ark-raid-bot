@@ -62,6 +62,49 @@ def clean_ocr_text(text: str) -> list[str]:
     return cleaned_lines
 
 
+def prepare_ocr_images(image):
+    from PIL import Image, ImageChops, ImageOps
+
+    rgb_image = image.convert("RGB")
+
+    grayscale_image = ImageOps.grayscale(rgb_image)
+    grayscale_image = ImageOps.autocontrast(grayscale_image)
+    grayscale_image = grayscale_image.resize(
+        (grayscale_image.width * 2, grayscale_image.height * 2),
+    )
+
+    red, green, blue = rgb_image.split()
+    red_signal = ImageChops.lighter(
+        ImageChops.subtract(red, green),
+        ImageChops.subtract(red, blue),
+    )
+    red_signal = ImageOps.autocontrast(red_signal)
+    red_text_image = red_signal.point(lambda pixel: 0 if pixel >= 35 else 255)
+    nearest_filter = getattr(getattr(Image, "Resampling", Image), "NEAREST")
+    red_text_image = red_text_image.resize(
+        (red_text_image.width * 2, red_text_image.height * 2),
+        resample=nearest_filter,
+    )
+
+    return [grayscale_image, red_text_image]
+
+
+def merge_cleaned_ocr_lines(*texts: str) -> list[str]:
+    merged_lines = []
+    seen = set()
+
+    for text in texts:
+        for line in clean_ocr_text(text):
+            key = line.casefold()
+            if key in seen:
+                continue
+
+            merged_lines.append(line)
+            seen.add(key)
+
+    return merged_lines
+
+
 def new_lines_since_last_scan(lines: Iterable[str], seen: set[str]) -> list[str]:
     fresh = []
 
@@ -246,7 +289,7 @@ class ScreenTribeLogMonitor:
 
         try:
             import pytesseract
-            from PIL import ImageGrab, ImageOps
+            from PIL import ImageGrab
         except Exception as exc:
             await self.channel.send(
                 "Screen tribelog monitor could not start. Install `pillow pytesseract` "
@@ -301,30 +344,33 @@ class ScreenTribeLogMonitor:
                     self.region.height,
                     self.region.bbox,
                 )
-                image = await asyncio.to_thread(ImageGrab.grab, bbox=self.region.bbox)
-                logger.debug("Screen capture complete. image_size=%s mode=%s", image.size, image.mode)
+                screenshot = await asyncio.to_thread(ImageGrab.grab, bbox=self.region.bbox)
+                logger.debug("Screen capture complete. image_size=%s mode=%s", screenshot.size, screenshot.mode)
 
-                image = await asyncio.to_thread(ImageOps.grayscale, image)
-                image = await asyncio.to_thread(ImageOps.autocontrast, image)
-                image = await asyncio.to_thread(
-                    image.resize,
-                    (image.width * 2, image.height * 2),
+                ocr_images = await asyncio.to_thread(prepare_ocr_images, screenshot)
+                logger.debug(
+                    "OCR image preprocessing complete. image_count=%s image_size=%s modes=%s",
+                    len(ocr_images),
+                    ocr_images[0].size if ocr_images else None,
+                    [ocr_image.mode for ocr_image in ocr_images],
                 )
-                logger.debug("OCR image preprocessing complete. image_size=%s mode=%s", image.size, image.mode)
 
-                logger.debug("Sending captured region to Tesseract OCR.")
-                text = await asyncio.to_thread(
-                    pytesseract.image_to_string,
-                    image,
-                    config="--psm 6",
-                )
-                logger.debug("Raw OCR output preview: %r", text[:500])
+                logger.debug("Sending captured region variants to Tesseract OCR.")
+                texts = []
+                for index, ocr_image in enumerate(ocr_images):
+                    text = await asyncio.to_thread(
+                        pytesseract.image_to_string,
+                        ocr_image,
+                        config="--psm 6",
+                    )
+                    texts.append(text)
+                    logger.debug("Raw OCR output preview variant=%s: %r", index, text[:500])
 
-                cleaned_lines = clean_ocr_text(text)
+                cleaned_lines = merge_cleaned_ocr_lines(*texts)
                 fresh_lines = new_lines_since_last_scan(cleaned_lines, self._seen_lines)
                 logger.debug(
                     "Screen tribelog OCR scan complete. raw_chars=%s cleaned_lines=%s fresh_lines=%s seen_lines=%s",
-                    len(text),
+                    sum(len(text) for text in texts),
                     len(cleaned_lines),
                     len(fresh_lines),
                     len(self._seen_lines),

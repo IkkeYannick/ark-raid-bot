@@ -14,8 +14,10 @@ from bot.screen_monitor import (
     clean_ocr_text,
     default_tribelog_region,
     has_destroyed_structure_alert,
+    merge_cleaned_ocr_lines,
     new_lines_since_last_scan,
     parse_region,
+    prepare_ocr_images,
     resolve_tesseract_cmd,
 )
 
@@ -120,6 +122,30 @@ def test_clean_ocr_text_removes_noise():
     lines = clean_ocr_text("  Day 12, 16:13: Your wall was destroyed!  \n||\nabc\n")
 
     assert lines == ["Day 12, 16:13: Your wall was destroyed!"]
+
+
+def test_prepare_ocr_images_turns_red_text_dark_for_tesseract():
+    Image = pytest.importorskip("PIL.Image")
+
+    image = Image.new("RGB", (4, 4), "#2a8faf")
+    image.putpixel((1, 1), (230, 0, 0))
+
+    _, red_text_image = prepare_ocr_images(image)
+
+    assert red_text_image.getpixel((2, 2)) == 0
+    assert red_text_image.getpixel((0, 0)) == 255
+
+
+def test_merge_cleaned_ocr_lines_keeps_unique_lines_from_ocr_variants():
+    lines = merge_cleaned_ocr_lines(
+        "Day 12, 16:13: White log line\n",
+        "Day 12, 16:13: White log line\nDay 12, 16:14: Your wall was destroyed!\n",
+    )
+
+    assert lines == [
+        "Day 12, 16:13: White log line",
+        "Day 12, 16:14: Your wall was destroyed!",
+    ]
 
 
 def test_new_lines_since_last_scan_dedupes_case_insensitive():
