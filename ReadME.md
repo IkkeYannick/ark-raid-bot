@@ -37,6 +37,7 @@ Have fun with sleepless nights :)
 - Python 3.10 or newer
 - A Discord bot token [Learn how to:](#how-to-create-ur-own-discord-bot-so-this-works)
 - The tribe log must be sent into a Discord channel (by another bot tribeloghook ark bot)
+- Optional for screen monitoring: Tesseract OCR installed on the PC that runs the bot
 
 ---
 
@@ -46,6 +47,14 @@ Have fun with sleepless nights :)
 ```terminal
 python -m pip install discord.py python-dotenv
 ```
+
+For the screen tribelog monitor, also install:
+```terminal
+python -m pip install pillow pytesseract
+```
+
+Install the Tesseract OCR app too. On Windows, the common installer is from UB Mannheim:
+https://github.com/UB-Mannheim/tesseract/wiki
 ---
 
 ### 2. Create a .env file
@@ -70,6 +79,12 @@ DISABLE_NOT_MAIN_MAP_ALERTS=false (false by default turn on true if u dont want 
 DISABLE_SENSOR_ALERTS=false (Optional - set to 'true' to disable raid alerts)
 DISABLE_DESTRUCTION_ALERTS=false (Optional - set to 'true' to disable destruction alerts)
 DEBUG=false (Optional - set to true for verbose logs)
+SCREEN_LOG_REGION= (Optional - x,y,width,height for the screen OCR box. Empty means the bot watches the middle tribe log area automatically)
+SCREEN_LOG_INTERVAL_SECONDS=3 (Optional - seconds between OCR scans)
+SCREEN_LOG_OVERLAY=true (Optional - shows a cyan overlay around the watched screen area)
+SCREEN_LOG_CHANNEL_ID=123456789012345678 (Optional - channel where the standalone screen monitor posts OCR lines. Defaults to TRIBE_LOG_CHANNEL_ID)
+SCREEN_LOG_DISCORD_TOKEN=YOUR_SECOND_BOT_TOKEN (Optional - token for the standalone screen monitor. Defaults to DISCORD_TOKEN)
+TESSERACT_CMD= (Optional - full path to tesseract.exe if Windows cannot find it automatically)
 ```
 ---
 
@@ -91,7 +106,7 @@ or use the default:
 ### 4. Run the bot
 
 ```python
-python RaidBot.py
+python bot.py
 ```
 
 If it works, you should see:
@@ -121,6 +136,46 @@ When debug mode is enabled, you'll see:
 - Destruction counters
 - Full stack traces if errors occur
 - Sensor and destruction alert details
+
+---
+
+## Screen tribe log monitor
+
+This mode watches the tribe log directly on the screen, reads the text with OCR, and posts new lines into a Discord text channel.
+
+Run only the screen monitor, without the raid alert bot:
+```terminal
+python screen_monitor_bot.py
+```
+
+This starts screen OCR automatically and stops when you close the terminal with Ctrl+C. If you want the normal raid bot and the screen monitor running at the same time, use `SCREEN_LOG_DISCORD_TOKEN` with a second Discord bot token so each process has its own bot login.
+
+Start it in the current channel:
+```terminal
+!screenlog_start
+```
+
+Start it in another channel:
+```terminal
+!screenlog_start #tribelog-ocr
+```
+
+Stop it:
+```terminal
+!screenlog_stop
+```
+
+Check where it is watching:
+```terminal
+!screenlog_status
+```
+
+Set the watched rectangle until the bot restarts:
+```terminal
+!screenlog_region 760 210 420 660
+```
+
+The default rectangle is centered around the ARK tribe log panel, like the screenshots. If the cyan overlay is slightly off, use `!screenlog_region x y width height`, then stop and start the monitor again.
 
 ---
 
