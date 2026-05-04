@@ -1,4 +1,5 @@
 import asyncio
+import io
 import logging
 import os
 import re
@@ -103,6 +104,13 @@ def merge_cleaned_ocr_lines(*texts: str) -> list[str]:
             seen.add(key)
 
     return merged_lines
+
+
+def screenshot_to_png_bytes(image) -> io.BytesIO:
+    buffer = io.BytesIO()
+    image.save(buffer, format="PNG")
+    buffer.seek(0)
+    return buffer
 
 
 def new_lines_since_last_scan(lines: Iterable[str], seen: set[str]) -> list[str]:
@@ -419,3 +427,132 @@ class ScreenTribeLogMonitor:
 
         self._sent_error_notice = True
         await self.channel.send("Screen tribelog OCR hit an error. Check the bot console logs.")
+
+
+class ScreenTribeLogScreenshotMonitor:
+    def __init__(
+        self,
+        channel,
+        region: ScreenRegion | None = None,
+        interval_seconds: float = 30.0,
+        show_overlay: bool = True,
+    ):
+        self.channel = channel
+        self.region = region
+        self.interval_seconds = interval_seconds
+        self.show_overlay = show_overlay
+        self._task: asyncio.Task | None = None
+        self._overlay: OverlayWindow | None = None
+        self._sent_error_notice = False
+
+    @property
+    def is_running(self) -> bool:
+        return self._task is not None and not self._task.done()
+
+    async def start(self) -> None:
+        if self.is_running:
+            logger.debug("Screen tribelog screenshot monitor start requested, but it is already running.")
+            return
+
+        logger.debug("Starting screen tribelog screenshot monitor task.")
+        self._task = asyncio.create_task(self._run(), name="screen-tribelog-screenshot-monitor")
+
+    async def stop(self) -> None:
+        logger.debug("Stopping screen tribelog screenshot monitor task.")
+        if self._task:
+            self._task.cancel()
+            try:
+                await self._task
+            except asyncio.CancelledError:
+                pass
+
+        if self._overlay:
+            self._overlay.stop()
+
+        self._task = None
+        logger.debug("Screen tribelog screenshot monitor task stopped.")
+
+    async def _run(self) -> None:
+        try:
+            import discord
+            from PIL import ImageGrab
+        except Exception as exc:
+            await self.channel.send(
+                "Screen tribelog screenshot monitor could not start. Install `pillow` "
+                "and make sure `discord.py` is installed."
+            )
+            logger.exception("Screen screenshot monitor dependencies are missing: %s", exc)
+            return
+
+        if self.region is None:
+            logger.debug("No screen region configured. Capturing full screen once to detect size.")
+            screen_width, screen_height = ImageGrab.grab().size
+            self.region = default_tribelog_region(screen_width, screen_height)
+            logger.debug(
+                "Auto-selected screen tribelog screenshot region: x=%s y=%s width=%s height=%s",
+                self.region.x,
+                self.region.y,
+                self.region.width,
+                self.region.height,
+            )
+
+        self._ensure_overlay()
+
+        await self.channel.send(
+            "Screen tribelog screenshot monitor started. Posting screenshots from "
+            f"`x={self.region.x}, y={self.region.y}, w={self.region.width}, h={self.region.height}`."
+        )
+        logger.debug(
+            "Screen tribelog screenshot monitor running. interval=%ss overlay=%s region=(%s,%s,%s,%s)",
+            self.interval_seconds,
+            self.show_overlay,
+            self.region.x,
+            self.region.y,
+            self.region.width,
+            self.region.height,
+        )
+
+        while True:
+            try:
+                self._ensure_overlay()
+                logger.debug(
+                    "Capturing screen tribelog screenshot: x=%s y=%s width=%s height=%s bbox=%s",
+                    self.region.x,
+                    self.region.y,
+                    self.region.width,
+                    self.region.height,
+                    self.region.bbox,
+                )
+                screenshot = await asyncio.to_thread(ImageGrab.grab, bbox=self.region.bbox)
+                image_buffer = await asyncio.to_thread(screenshot_to_png_bytes, screenshot)
+                now = int(time.time())
+                await self.channel.send(
+                    f"**Screen tribelog screenshot** <t:{now}:T>",
+                    file=discord.File(image_buffer, filename="tribelog.png"),
+                )
+                logger.debug("Screen tribelog screenshot sent to Discord.")
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                logger.exception("Screen tribelog screenshot capture failed.")
+                await self._send_error_once()
+
+            await asyncio.sleep(self.interval_seconds)
+
+    def _ensure_overlay(self) -> None:
+        if not self.show_overlay or self.region is None:
+            return
+
+        if self._overlay and self._overlay.is_running:
+            return
+
+        self._overlay = OverlayWindow(self.region)
+        self._overlay.start()
+        logger.debug("Screen tribelog screenshot overlay started.")
+
+    async def _send_error_once(self) -> None:
+        if self._sent_error_notice:
+            return
+
+        self._sent_error_notice = True
+        await self.channel.send("Screen tribelog screenshot monitor hit an error. Check the bot console logs.")

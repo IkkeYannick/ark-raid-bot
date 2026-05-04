@@ -8,11 +8,13 @@ from bot.config import (
     SCREEN_LOG_CHANNEL_ID,
     SCREEN_LOG_DISCORD_TOKEN,
     SCREEN_LOG_INTERVAL_SECONDS,
+    SCREEN_LOG_MODE,
     SCREEN_LOG_OVERLAY,
     SCREEN_LOG_REGION,
+    SCREEN_LOG_SCREENSHOT_INTERVAL_SECONDS,
     ROLE_ID,
 )
-from bot.screen_monitor import ScreenTribeLogMonitor, parse_region
+from bot.screen_monitor import ScreenTribeLogMonitor, ScreenTribeLogScreenshotMonitor, parse_region
 
 
 logger = logging.getLogger("RaidBot.screen_monitor_runner")
@@ -48,13 +50,26 @@ async def on_ready():
         await client.close()
         return
 
-    screen_monitor = ScreenTribeLogMonitor(
-        channel=channel,
-        region=region,
-        interval_seconds=SCREEN_LOG_INTERVAL_SECONDS,
-        show_overlay=SCREEN_LOG_OVERLAY,
-        role_mention=f"<@&{ROLE_ID}>",
-    )
+    if SCREEN_LOG_MODE == "screenshot":
+        screen_monitor = ScreenTribeLogScreenshotMonitor(
+            channel=channel,
+            region=region,
+            interval_seconds=SCREEN_LOG_SCREENSHOT_INTERVAL_SECONDS,
+            show_overlay=SCREEN_LOG_OVERLAY,
+        )
+    elif SCREEN_LOG_MODE == "ocr":
+        screen_monitor = ScreenTribeLogMonitor(
+            channel=channel,
+            region=region,
+            interval_seconds=SCREEN_LOG_INTERVAL_SECONDS,
+            show_overlay=SCREEN_LOG_OVERLAY,
+            role_mention=f"<@&{ROLE_ID}>",
+        )
+    else:
+        logger.error("Invalid SCREEN_LOG_MODE=%s. Use `ocr` or `screenshot`.", SCREEN_LOG_MODE)
+        await client.close()
+        return
+
     await screen_monitor.start()
 
 

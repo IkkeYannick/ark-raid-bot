@@ -81,6 +81,8 @@ DISABLE_DESTRUCTION_ALERTS=false (Optional - set to 'true' to disable destructio
 DEBUG=false (Optional - set to true for verbose logs)
 SCREEN_LOG_REGION= (Optional - x,y,width,height for the screen OCR box. Empty means the bot watches the middle tribe log area automatically)
 SCREEN_LOG_INTERVAL_SECONDS=3 (Optional - seconds between OCR scans)
+SCREEN_LOG_SCREENSHOT_INTERVAL_SECONDS=60 (Optional - seconds between screenshot posts)
+SCREEN_LOG_MODE=ocr (Optional - standalone screen monitor mode: ocr or screenshot)
 SCREEN_LOG_OVERLAY=true (Optional - shows a cyan overlay around the watched screen area)
 SCREEN_LOG_CHANNEL_ID=123456789012345678 (Optional - channel where the standalone screen monitor posts OCR lines. Defaults to TRIBE_LOG_CHANNEL_ID)
 SCREEN_LOG_DISCORD_TOKEN=YOUR_SECOND_BOT_TOKEN (Optional - token for the standalone screen monitor. Defaults to DISCORD_TOKEN)
@@ -150,6 +152,11 @@ python screen_monitor_bot.py
 
 This starts screen OCR automatically and stops when you close the terminal with Ctrl+C. If you want the normal raid bot and the screen monitor running at the same time, use `SCREEN_LOG_DISCORD_TOKEN` with a second Discord bot token so each process has its own bot login.
 
+To make the standalone screen monitor post tribe log screenshots instead of OCR text, set:
+```env
+SCREEN_LOG_MODE=screenshot
+```
+
 Start it in the current channel:
 ```terminal
 !screenlog_start
@@ -165,9 +172,29 @@ Stop it:
 !screenlog_stop
 ```
 
+Start screenshot posting in the current channel:
+```terminal
+!screenlog_screenshot_start
+```
+
+Start screenshot posting in another channel:
+```terminal
+!screenlog_screenshot_start #tribelog-screenshots
+```
+
+Stop screenshot posting:
+```terminal
+!screenlog_screenshot_stop
+```
+
 Check where it is watching:
 ```terminal
 !screenlog_status
+```
+
+Check where screenshot posting is watching:
+```terminal
+!screenlog_screenshot_status
 ```
 
 Set the watched rectangle until the bot restarts:

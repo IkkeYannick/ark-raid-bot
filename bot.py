@@ -9,7 +9,12 @@ from discord.ext import commands
 
 from bot.config import *
 from bot.core import *
-from bot.screen_monitor import ScreenRegion, ScreenTribeLogMonitor, parse_region
+from bot.screen_monitor import (
+    ScreenRegion,
+    ScreenTribeLogMonitor,
+    ScreenTribeLogScreenshotMonitor,
+    parse_region,
+)
 
 
 logger = logging.getLogger("RaidBot")
@@ -27,6 +32,7 @@ raid_counter = 0
 destroyed_counter = 0
 counter_reset_time = datetime.now()
 screen_monitor = None
+screenshot_monitor = None
 screen_region_override = None
 
 intents = discord.Intents.default()
@@ -89,6 +95,46 @@ async def screenlog_stop(ctx):
     await ctx.send("Screen tribelog monitor stopped.")
 
 
+@bot.command(name="screenlog_screenshot_start")
+@commands.has_permissions(manage_guild=True)
+async def screenlog_screenshot_start(ctx, channel: discord.TextChannel = None):
+    global screenshot_monitor
+
+    if screenshot_monitor and screenshot_monitor.is_running:
+        await ctx.send("Screen tribelog screenshot monitor is already running.")
+        return
+
+    target_channel = channel or ctx.channel
+
+    try:
+        region = get_screen_region()
+    except ValueError as exc:
+        await ctx.send(f"Could not start screen screenshot monitor: {exc}")
+        return
+
+    screenshot_monitor = ScreenTribeLogScreenshotMonitor(
+        channel=target_channel,
+        region=region,
+        interval_seconds=SCREEN_LOG_SCREENSHOT_INTERVAL_SECONDS,
+        show_overlay=SCREEN_LOG_OVERLAY,
+    )
+    await screenshot_monitor.start()
+    await ctx.send(f"Starting screen tribelog screenshot monitor in {target_channel.mention}.")
+
+
+@bot.command(name="screenlog_screenshot_stop")
+@commands.has_permissions(manage_guild=True)
+async def screenlog_screenshot_stop(ctx):
+    global screenshot_monitor
+
+    if not screenshot_monitor or not screenshot_monitor.is_running:
+        await ctx.send("Screen tribelog screenshot monitor is not running.")
+        return
+
+    await screenshot_monitor.stop()
+    await ctx.send("Screen tribelog screenshot monitor stopped.")
+
+
 @bot.command(name="screenlog_status")
 async def screenlog_status(ctx):
     if not screen_monitor or not screen_monitor.is_running:
@@ -103,6 +149,22 @@ async def screenlog_status(ctx):
         )
     else:
         await ctx.send("Screen tribelog monitor is starting and detecting the screen size.")
+
+
+@bot.command(name="screenlog_screenshot_status")
+async def screenlog_screenshot_status(ctx):
+    if not screenshot_monitor or not screenshot_monitor.is_running:
+        await ctx.send("Screen tribelog screenshot monitor is not running.")
+        return
+
+    region = screenshot_monitor.region
+    if region:
+        await ctx.send(
+            "Screen tribelog screenshot monitor is running at "
+            f"`x={region.x}, y={region.y}, w={region.width}, h={region.height}`."
+        )
+    else:
+        await ctx.send("Screen tribelog screenshot monitor is starting and detecting the screen size.")
 
 
 @bot.command(name="screenlog_region")
@@ -123,6 +185,8 @@ async def screenlog_region(ctx, x: int, y: int, width: int, height: int):
 
 @screenlog_start.error
 @screenlog_stop.error
+@screenlog_screenshot_start.error
+@screenlog_screenshot_stop.error
 @screenlog_region.error
 async def screenlog_command_error(ctx, error):
     if isinstance(error, commands.MissingPermissions):

@@ -19,6 +19,7 @@ from bot.screen_monitor import (
     parse_region,
     prepare_ocr_images,
     resolve_tesseract_cmd,
+    screenshot_to_png_bytes,
 )
 
 
@@ -146,6 +147,16 @@ def test_merge_cleaned_ocr_lines_keeps_unique_lines_from_ocr_variants():
         "Day 12, 16:13: White log line",
         "Day 12, 16:14: Your wall was destroyed!",
     ]
+
+
+def test_screenshot_to_png_bytes_returns_rewinded_png_buffer():
+    Image = pytest.importorskip("PIL.Image")
+
+    image = Image.new("RGB", (2, 2), "red")
+    buffer = screenshot_to_png_bytes(image)
+
+    assert buffer.tell() == 0
+    assert buffer.read(8) == b"\x89PNG\r\n\x1a\n"
 
 
 def test_new_lines_since_last_scan_dedupes_case_insensitive():

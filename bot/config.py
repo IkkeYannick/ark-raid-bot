@@ -34,9 +34,13 @@ SCREEN_LOG_REGION = get_env_variable("SCREEN_LOG_REGION", required=False, defaul
 SCREEN_LOG_INTERVAL_SECONDS = float(
     get_env_variable("SCREEN_LOG_INTERVAL_SECONDS", required=False, default="10")
 )
+SCREEN_LOG_SCREENSHOT_INTERVAL_SECONDS = float(
+    get_env_variable("SCREEN_LOG_SCREENSHOT_INTERVAL_SECONDS", required=False, default="60")
+)
 SCREEN_LOG_OVERLAY = (
     get_env_variable("SCREEN_LOG_OVERLAY", required=False, default="true").lower() == "true"
 )
+SCREEN_LOG_MODE = get_env_variable("SCREEN_LOG_MODE", required=False, default="ocr").strip().lower()
 SCREEN_LOG_CHANNEL_ID = get_env_variable(
     "SCREEN_LOG_CHANNEL_ID",
     as_int=True,
